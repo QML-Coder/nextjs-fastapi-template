@@ -2,6 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Prerequisites
+
+### Required Tools
+- **uv**: Python package manager - [Installation guide](https://docs.astral.sh/uv/getting-started/installation/)
+- **pnpm**: Node.js package manager - Install via `npm install -g pnpm`
+- **Docker**: For database and containerized development
+- **Python 3.12+** and **Node.js**
+
+See [docs/get-started.md](docs/get-started.md) for complete setup instructions.
+
 ## Architecture Overview
 
 This is a **Next.js + FastAPI full-stack template** with end-to-end type safety. The key architectural pattern is the **hot-reload type-safe API workflow**:
