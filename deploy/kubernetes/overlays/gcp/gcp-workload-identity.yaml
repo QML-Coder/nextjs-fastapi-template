@@ -1,0 +1,232 @@
+# GCP Workload Identity Configuration
+# Enables secure access to GCP services from Kubernetes pods without storing service account keys
+
+# Kubernetes Service Account with Workload Identity annotation
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: backend-workload-identity
+  namespace: production
+  labels:
+    app: backend
+    component: workload-identity
+  annotations:
+    # Link to GCP service account
+    iam.gke.io/gcp-service-account: backend-service@PROJECT_ID.iam.gserviceaccount.com
+    
+---
+# Example: ConfigMap for GCP configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gcp-config
+  namespace: production
+  labels:
+    app: backend
+    component: gcp-config
+data:
+  PROJECT_ID: "your-gcp-project-id"
+  REGION: "us-central1"
+  
+  # Cloud SQL configuration
+  CLOUD_SQL_CONNECTION_NAME: "your-project:us-central1:your-db-instance"
+  
+  # Cloud Storage configuration
+  STORAGE_BUCKET: "your-frontend-bucket"
+  
+  # Cloud Monitoring configuration
+  MONITORING_ENABLED: "true"
+  
+  # Cloud Logging configuration
+  LOGGING_LEVEL: "INFO"
+
+---
+# Updated backend deployment with Workload Identity
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-workload-identity
+  namespace: production
+  labels:
+    app: backend
+    component: api-workload-identity
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: backend
+      component: api-workload-identity
+  template:
+    metadata:
+      labels:
+        app: backend
+        component: api-workload-identity
+    spec:
+      # Use the Workload Identity service account
+      serviceAccountName: backend-workload-identity
+      
+      containers:
+      - name: backend
+        image: your-registry/nextjs-fastapi-backend:latest
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        # GCP configuration from ConfigMap
+        - name: GOOGLE_CLOUD_PROJECT
+          valueFrom:
+            configMapKeyRef:
+              name: gcp-config
+              key: PROJECT_ID
+        - name: GCP_REGION
+          valueFrom:
+            configMapKeyRef:
+              name: gcp-config
+              key: REGION
+        - name: CLOUD_SQL_CONNECTION_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: gcp-config
+              key: CLOUD_SQL_CONNECTION_NAME
+        
+        # Application secrets
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: DATABASE_URL
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: SECRET_KEY
+        
+        # Enable GCP libraries to use Workload Identity
+        - name: GOOGLE_APPLICATION_CREDENTIALS
+          value: ""  # Empty to use metadata service
+        
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        
+        # Health checks
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        
+        # Security context
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      
+      securityContext:
+        fsGroup: 1000
+
+---
+# Cloud SQL Proxy sidecar (alternative to private IP connection)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-with-sql-proxy
+  namespace: production
+  labels:
+    app: backend
+    component: api-sql-proxy
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: backend
+      component: api-sql-proxy
+  template:
+    metadata:
+      labels:
+        app: backend
+        component: api-sql-proxy
+    spec:
+      serviceAccountName: backend-workload-identity
+      
+      containers:
+      # Main application container
+      - name: backend
+        image: your-registry/nextjs-fastapi-backend:latest
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        # Connect to database via Cloud SQL Proxy
+        - name: DATABASE_URL
+          value: "postgresql://postgres:password@127.0.0.1:5432/nextjs_fastapi"
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: SECRET_KEY
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      
+      # Cloud SQL Proxy sidecar
+      - name: cloud-sql-proxy
+        image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.1.0
+        args:
+        - "--structured-logs"
+        - "--port=5432"
+        - "PROJECT_ID:REGION:INSTANCE_NAME"  # Replace with actual values
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 65532
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"

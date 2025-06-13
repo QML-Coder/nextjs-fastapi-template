@@ -1,0 +1,135 @@
+# Google Cloud Persistent Disk CSI Driver and Storage Classes
+# Enables dynamic provisioning of persistent storage using Google Cloud Persistent Disks
+
+# High-performance SSD storage class (default)
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gcp-ssd
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: pd.csi.storage.gke.io
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+parameters:
+  type: pd-ssd
+  replication-type: regional-pd  # Regional for high availability
+  zones: us-central1-a,us-central1-b,us-central1-c  # Adjust for your region
+
+---
+# Standard persistent disk storage class (cost-effective)
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gcp-standard
+provisioner: pd.csi.storage.gke.io
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+parameters:
+  type: pd-standard
+  replication-type: regional-pd
+
+---
+# Balanced persistent disk storage class (good performance/cost balance)
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gcp-balanced
+provisioner: pd.csi.storage.gke.io
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+parameters:
+  type: pd-balanced
+  replication-type: regional-pd
+
+---
+# Extreme persistent disk storage class (highest performance)
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gcp-extreme
+provisioner: pd.csi.storage.gke.io
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+parameters:
+  type: pd-extreme
+  replication-type: regional-pd
+
+---
+# Retain storage class (data preserved after pod deletion)
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gcp-ssd-retain
+provisioner: pd.csi.storage.gke.io
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
+allowVolumeExpansion: true
+parameters:
+  type: pd-ssd
+  replication-type: regional-pd
+
+---
+# Example PersistentVolumeClaim for application data
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: backend-data
+  namespace: production
+  labels:
+    app: backend
+    component: storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: gcp-ssd
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+# Example PersistentVolumeClaim for shared data (ReadWriteMany)
+# Note: GCP Filestore is required for ReadWriteMany access mode
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: shared-data
+  namespace: production
+  labels:
+    app: backend
+    component: shared-storage
+spec:
+  accessModes:
+    - ReadOnlyMany  # ReadWriteMany requires Filestore
+  storageClassName: gcp-ssd
+  resources:
+    requests:
+      storage: 5Gi
+
+---
+# Snapshot class for backup purposes
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: gcp-snapshot-class
+  labels:
+    app: backup
+driver: pd.csi.storage.gke.io
+deletionPolicy: Delete
+parameters:
+  snapshot-type: regional  # Regional snapshots for better availability
+
+---
+# Example volume snapshot
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: backend-data-snapshot
+  namespace: production
+  labels:
+    app: backend
+    component: backup
+spec:
+  volumeSnapshotClassName: gcp-snapshot-class
+  source:
+    persistentVolumeClaimName: backend-data

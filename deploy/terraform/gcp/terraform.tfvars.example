@@ -1,0 +1,49 @@
+# GCP Infrastructure Configuration
+# Copy this file to terraform.tfvars and customize the values
+
+# Project Configuration
+project_id   = "your-gcp-project-id"
+project_name = "nextjs-fastapi"
+environment  = "dev"  # dev, staging, prod
+gcp_region   = "us-central1"
+
+# Networking Configuration
+gke_subnet_cidr        = "10.0.0.0/24"
+pod_ip_cidr_range      = "10.1.0.0/16"
+service_ip_cidr_range  = "10.2.0.0/16"
+master_ipv4_cidr_block = "10.3.0.0/28"
+
+# GKE Configuration
+gke_release_channel = "STABLE"  # RAPID, REGULAR, STABLE
+node_machine_type   = "e2-medium"  # Use e2-standard-2 or larger for production
+node_disk_size_gb   = 50
+use_preemptible_nodes = false  # Set to true for cost savings in dev/staging
+
+# Node Pool Scaling
+node_pool_size     = 2
+node_pool_min_size = 1
+node_pool_max_size = 5
+
+# Cluster Autoscaling
+cluster_autoscaling_min_cpu    = 1
+cluster_autoscaling_max_cpu    = 20
+cluster_autoscaling_min_memory = 2
+cluster_autoscaling_max_memory = 80
+
+# Database Configuration
+database_version           = "POSTGRES_15"
+database_tier              = "db-f1-micro"  # Use db-n1-standard-1 or larger for production
+database_availability_type = "ZONAL"  # Use REGIONAL for production high availability
+database_disk_size         = 20
+database_backup_retention_days = 7
+
+database_name     = "nextjs_fastapi"
+database_username = "postgres"
+database_password = "change-this-secure-password"  # Use a strong password!
+
+# Frontend Configuration
+frontend_bucket_location = "US"  # US, EU, ASIA, or specific region
+
+# Domain Configuration (optional)
+# domain_name = "your-domain.com"
+# create_dns_zone = false

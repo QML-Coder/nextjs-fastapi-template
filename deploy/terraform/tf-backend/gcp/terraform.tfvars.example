@@ -1,0 +1,16 @@
+# GCP Backend Configuration
+# Copy this file to terraform.tfvars and customize the values
+
+# GCP project ID (required)
+project_id = "your-gcp-project-id"
+
+# GCP region where backend resources will be created
+gcp_region = "us-central1"
+
+# GCS bucket base name for Terraform state storage
+# Random suffix will be added to ensure global uniqueness
+state_bucket_name = "nextjs-fastapi-terraform-state"
+
+# Bucket location (region or multi-region)
+# Options: US, EU, ASIA, or specific region like us-central1
+bucket_location = "US"

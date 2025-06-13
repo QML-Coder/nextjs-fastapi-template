@@ -1,0 +1,141 @@
+# GCP Load Balancer Controller and Ingress Configuration
+# This configures Google Cloud Load Balancer for GKE ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gcp-backend-ingress
+  namespace: production
+  labels:
+    app: backend
+  annotations:
+    # Use Google Cloud Load Balancer
+    kubernetes.io/ingress.class: "gce"
+    
+    # Global load balancer (not regional)
+    kubernetes.io/ingress.global-static-ip-name: "frontend-ip"
+    
+    # Enable Cloud CDN for static content
+    cloud.google.com/cdn-cache-mode: "CACHE_ALL_STATIC"
+    
+    # SSL certificate management
+    networking.gke.io/managed-certificates: "backend-ssl-cert"
+    
+    # Backend configuration
+    cloud.google.com/backend-config: '{"default": "backend-config"}'
+    
+    # Health check configuration
+    ingress.gcp.kubernetes.io/health-check-config: '{"type": "HTTP", "port": 8000, "requestPath": "/health"}'
+    
+    # Session affinity
+    cloud.google.com/session-affinity: "CLIENT_IP"
+    
+    # Timeout settings
+    cloud.google.com/timeout-sec: "30"
+spec:
+  rules:
+  - host: api.your-domain.com  # Change this to your API domain
+    http:
+      paths:
+      - path: /*
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: backend-service
+            port:
+              number: 80
+  # Default rule (no host specified)
+  - http:
+      paths:
+      - path: /*
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: backend-service
+            port:
+              number: 80
+
+---
+# Managed SSL Certificate for automatic HTTPS
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: backend-ssl-cert
+  namespace: production
+spec:
+  domains:
+    - api.your-domain.com  # Change this to your API domain
+    - your-domain.com      # Change this to your frontend domain
+
+---
+# Backend configuration for advanced load balancer features
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: backend-config
+  namespace: production
+spec:
+  # Health check configuration
+  healthCheck:
+    checkIntervalSec: 10
+    timeoutSec: 5
+    healthyThreshold: 2
+    unhealthyThreshold: 3
+    type: HTTP
+    requestPath: /health
+    port: 8000
+  
+  # Connection draining timeout
+  connectionDraining:
+    drainingTimeoutSec: 30
+  
+  # Session affinity
+  sessionAffinity:
+    affinityType: "CLIENT_IP"
+    affinityCookieTtlSec: 3600
+  
+  # Cloud CDN configuration (for API responses that can be cached)
+  cdn:
+    enabled: false  # Set to true if you want to cache API responses
+    cachePolicy:
+      includeHost: true
+      includeProtocol: true
+      includeQueryString: false
+  
+  # Security policy (optional - for Cloud Armor)
+  # securityPolicy:
+  #   name: "your-security-policy"
+  
+  # Custom request headers
+  customRequestHeaders:
+    headers:
+    - "X-Forwarded-Proto:https"
+    - "X-GCP-Load-Balancer:true"
+
+---
+# Network Endpoint Group (NEG) for better load balancing
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service-neg
+  namespace: production
+  labels:
+    app: backend
+    component: api-neg
+  annotations:
+    # Enable NEG for better load balancing performance
+    cloud.google.com/neg: '{"ingress": true}'
+    
+    # Backend configuration
+    cloud.google.com/backend-config: '{"default": "backend-config"}'
+    
+    # Load balancer type
+    cloud.google.com/load-balancer-type: "External"
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 8000
+    protocol: TCP
+    name: http
+  selector:
+    app: backend

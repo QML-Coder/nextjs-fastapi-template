@@ -12,6 +12,42 @@ This directory contains **Kubernetes** configurations for deploying and running 
 - **Distributes traffic** between multiple copies of your application
 - **Manages secrets** like passwords and API keys securely
 
+## How These Configurations Are Applied
+
+The Kubernetes configurations in this directory are deployed automatically through the **Makefile** in the parent directory (`../Makefile`). The deployment follows a **two-step pattern**:
+
+### 1. Base Configuration (Applied First)
+```bash
+# Executed by: make deploy-k8s (or any cloud-specific target)
+kubectl apply -f kubernetes/base/namespace.yaml
+kubectl apply -f kubernetes/base/secrets.yaml  
+kubectl apply -f kubernetes/base/backend-deployment.yaml
+kubectl apply -f kubernetes/base/backend-service.yaml
+kubectl apply -f kubernetes/base/ingress.yaml
+```
+
+### 2. Cloud-Specific Overlays (Applied Second)
+```bash
+# For AWS: make deploy-k8s-aws
+kubectl apply -f kubernetes/overlays/aws/
+
+# For GCP: make deploy-k8s-gcp  
+kubectl apply -f kubernetes/overlays/gcp/
+
+# For other clouds...
+kubectl apply -f kubernetes/overlays/azure/
+kubectl apply -f kubernetes/overlays/oci/
+```
+
+### Complete Deployment Example
+```bash
+# Deploy to AWS (applies base + AWS overlays)
+make deploy-aws
+
+# Deploy to GCP (applies base + GCP overlays)  
+make deploy-gcp
+```
+
 ## Directory Structure
 
 ```
@@ -23,10 +59,15 @@ kubernetes/
 │   ├── backend-service.yaml     # How to expose the backend to traffic
 │   └── ingress.yaml         # How external traffic reaches the app
 └── overlays/                # Cloud-specific additional configurations
-    └── aws/                 # Amazon Web Services specific settings
-        ├── aws-load-balancer-controller.yaml
+    ├── aws/                 # Amazon Web Services specific settings
+    │   ├── aws-load-balancer-controller.yaml
+    │   ├── cluster-autoscaler.yaml
+    │   └── ebs-csi-driver.yaml
+    └── gcp/                 # Google Cloud Platform specific settings
+        ├── gcp-load-balancer-controller.yaml
         ├── cluster-autoscaler.yaml
-        └── ebs-csi-driver.yaml
+        ├── gcp-persistent-disk.yaml
+        └── gcp-workload-identity.yaml
 ```
 
 ## Core Kubernetes Concepts Explained
@@ -103,9 +144,15 @@ Configures how external internet traffic reaches your application.
 
 **Important:** You need to replace `api.your-domain.com` with your actual domain name.
 
+## Cloud-Specific Configurations (`overlays/`)
+
+These directories contain cloud-specific enhancements that are applied **after** the base configuration. Each cloud provider has unique services and features that require specialized configurations.
+
+---
+
 ## AWS-Specific Configurations (`overlays/aws/`)
 
-These files add AWS-specific functionality to your Kubernetes cluster.
+Amazon Web Services specific functionality for EKS (Elastic Kubernetes Service).
 
 ### `aws-load-balancer-controller.yaml`
 **What it does:** Enables Kubernetes to automatically create and manage AWS Load Balancers (ALB/NLB) when you create Ingress resources.
@@ -116,7 +163,7 @@ These files add AWS-specific functionality to your Kubernetes cluster.
 - **ServiceAccount**: Provides AWS permissions to the controller
 - **Deployment**: Runs the controller software that watches for Ingress resources
 
-### `cluster-autoscaler.yaml`
+### `cluster-autoscaler.yaml`  
 **What it does:** Automatically adds or removes worker nodes (EC2 instances) based on demand.
 
 **How it works:**
@@ -134,6 +181,68 @@ These files add AWS-specific functionality to your Kubernetes cluster.
 **Storage Classes:**
 - **ebs-gp3**: Default storage class with good performance/cost balance
 - **ebs-gp3-retain**: Same as above but data is kept even after pod deletion
+
+---
+
+## GCP-Specific Configurations (`overlays/gcp/`)
+
+Google Cloud Platform specific functionality for GKE (Google Kubernetes Engine).
+
+### `gcp-load-balancer-controller.yaml`
+**What it does:** Configures Google Cloud Load Balancer for external traffic routing with advanced features.
+
+**Key Components:**
+- **GCP Ingress**: Uses Google Cloud's global load balancer with static IP
+- **Managed SSL Certificate**: Automatic HTTPS certificate provisioning and renewal
+- **BackendConfig**: Advanced health checks, session affinity, and CDN integration
+- **Network Endpoint Groups (NEG)**: Improved load balancing performance
+
+**Features:**
+- **Global Load Balancer**: Distributes traffic across multiple regions
+- **Cloud CDN Integration**: Caches static content at edge locations worldwide
+- **Automatic SSL**: Manages SSL certificates for your domains
+- **Session Affinity**: Keeps users connected to the same backend instance
+
+### `cluster-autoscaler.yaml`
+**What it does:** Provides additional autoscaling configuration for GKE clusters.
+
+**Components:**
+- **Cluster Autoscaler**: Automatically scales node pools based on pod resource demands
+- **Horizontal Pod Autoscaler (HPA)**: Scales application pods based on CPU/memory usage
+- **Pod Disruption Budget**: Ensures minimum number of pods remain available during scaling
+
+**GKE Integration:** Works with GKE's built-in autoscaling features for optimal resource management.
+
+### `gcp-persistent-disk.yaml`
+**What it does:** Enables persistent storage using Google Cloud Persistent Disks with multiple performance tiers.
+
+**Storage Classes:**
+- **gcp-ssd**: High-performance SSD storage (default)
+- **gcp-standard**: Cost-effective standard storage
+- **gcp-balanced**: Good performance/cost balance
+- **gcp-extreme**: Highest performance for demanding workloads
+- **gcp-ssd-retain**: SSD storage that preserves data after pod deletion
+
+**Advanced Features:**
+- **Regional Persistent Disks**: High availability across zones
+- **Volume Snapshots**: Backup and restore functionality
+- **Automatic Expansion**: Disks can grow as needed
+
+### `gcp-workload-identity.yaml`
+**What it does:** Enables secure access to Google Cloud services from pods without storing service account keys.
+
+**Workload Identity explained:** Instead of storing credentials in pods, Workload Identity allows pods to authenticate as Google Cloud service accounts using metadata. This is much more secure than storing JSON key files.
+
+**Components:**
+- **Service Account Binding**: Links Kubernetes service accounts to Google Cloud service accounts
+- **GCP Configuration**: ConfigMap with project settings and service endpoints
+- **Cloud SQL Proxy**: Secure database connections without exposing credentials
+
+**Security Benefits:**
+- No credential files stored in containers
+- Automatic credential rotation
+- Fine-grained permissions per workload
+- Audit trail of service access
 
 ## Common Kubernetes Commands
 
@@ -178,9 +287,18 @@ kubectl run psql --image=postgres:15 --rm -it --restart=Never -n production -- p
 
 ### Managing Deployments
 ```bash
-# Apply all configurations
+# Apply base configurations (works for all clouds)
 kubectl apply -f base/
-kubectl apply -f overlays/aws/
+
+# Apply cloud-specific overlays
+kubectl apply -f overlays/aws/    # For AWS EKS
+kubectl apply -f overlays/gcp/    # For Google GKE
+kubectl apply -f overlays/azure/  # For Azure AKS
+kubectl apply -f overlays/oci/    # For Oracle Cloud
+
+# Or use Makefile targets (recommended)
+make deploy-k8s-aws    # Deploys base + AWS overlays
+make deploy-k8s-gcp    # Deploys base + GCP overlays
 
 # Update a deployment (after changing the image)
 kubectl rollout restart deployment/backend -n production
@@ -233,18 +351,41 @@ kubectl run psql --image=postgres:15 --rm -it --restart=Never -n production -- p
 ```
 
 ### Application Not Accessible
+
+#### AWS (EKS) Troubleshooting
 ```bash
-# Check ingress status
+# Check ALB ingress status
 kubectl get ingress -n production
 kubectl describe ingress backend-ingress -n production
 
 # Check load balancer status
 kubectl get svc -n production
 
-# Common issues:
+# Common AWS issues:
 # - AWS Load Balancer Controller not installed
-# - Wrong domain configuration
+# - Wrong domain configuration  
 # - Security groups blocking traffic
+# - ALB not created (check AWS console)
+```
+
+#### GCP (GKE) Troubleshooting
+```bash
+# Check GCP ingress status
+kubectl get ingress gcp-backend-ingress -n production
+kubectl describe ingress gcp-backend-ingress -n production
+
+# Check managed certificates
+kubectl get managedcertificates -n production
+kubectl describe managedcertificate backend-ssl-cert -n production
+
+# Check backend configurations
+kubectl get backendconfigs -n production
+
+# Common GCP issues:
+# - Domain not pointing to load balancer IP
+# - SSL certificate not validated (takes time)
+# - Backend service not healthy
+# - Firewall rules blocking traffic
 ```
 
 ### High Resource Usage
@@ -297,15 +438,30 @@ kubectl top nodes
 kubectl get events -n production --sort-by='.lastTimestamp'
 ```
 
+## Cloud Provider Comparison
+
+| Feature | AWS (EKS) | GCP (GKE) |
+|---------|-----------|-----------|
+| **Load Balancer** | ALB/NLB via AWS Load Balancer Controller | Google Cloud Load Balancer with NEG |
+| **SSL Certificates** | ACM (AWS Certificate Manager) | Google Managed Certificates |
+| **Storage** | EBS CSI Driver (gp3, io1, etc.) | Persistent Disk (SSD, Standard, Balanced) |
+| **Autoscaling** | Cluster Autoscaler + HPA | Built-in GKE autoscaling + HPA |
+| **Identity** | IAM Roles for Service Accounts (IRSA) | Workload Identity |
+| **Networking** | VPC CNI | VPC-native networking |
+| **Monitoring** | CloudWatch | Cloud Monitoring |
+| **Cost** | Pay per hour for worker nodes | Pay per hour + cluster management fee |
+
 ## Next Steps
 
 After deploying these configurations:
 
-1. **Configure monitoring** - Set up Prometheus and Grafana
-2. **Set up CI/CD** - Automate deployments with GitHub Actions
+1. **Configure monitoring** - Set up Prometheus and Grafana, or use cloud-native monitoring
+2. **Set up CI/CD** - Automate deployments with GitHub Actions, Cloud Build, or CodePipeline
 3. **Configure backups** - Set up database and persistent volume backups
 4. **Implement network policies** - Restrict pod-to-pod communication
 5. **Set up alerting** - Get notified when things go wrong
+6. **Domain configuration** - Point your domain to the load balancer IP
+7. **Security scanning** - Implement container image scanning and vulnerability management
 
 ## Getting Help
 
