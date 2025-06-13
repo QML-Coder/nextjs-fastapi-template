@@ -154,9 +154,9 @@ deploy-frontend-azure:
 
 deploy-docker:
 	@echo "🐳 Deploying with Docker Compose..."
-	cd docker-compose/production && docker-compose down
-	cd docker-compose/production && docker-compose pull
-	cd docker-compose/production && docker-compose up -d
+	cd docker-compose/production && docker compose down
+	cd docker-compose/production && docker compose pull
+	cd docker-compose/production && docker compose up -d
 	@echo "✅ Docker deployment completed!"
 	@echo "🌐 Application: http://localhost"
 
@@ -210,9 +210,9 @@ update-kubeconfig-do:
 # Validation
 # ============================================================================
 
-.PHONY: validate validate-terraform validate-kubernetes validate-docker validate-aws validate-gcp validate-azure
+.PHONY: validate validate-terraform validate-kubernetes validate-docker-compose validate-aws validate-gcp validate-azure
 
-validate: validate-terraform validate-kubernetes validate-docker
+validate: validate-terraform validate-kubernetes validate-docker-compose
 
 validate-terraform:
 	@echo "🔍 Validating Terraform configurations..."
@@ -235,10 +235,10 @@ validate-kubernetes:
 	done
 	@echo "✅ Kubernetes validation completed!"
 
-validate-docker:
-	@echo "🔍 Validating Docker configurations..."
-	cd docker-compose/production && docker-compose config > /dev/null
-	@echo "✅ Docker validation completed!"
+validate-docker-compose:
+	@echo "🔍 Validating Docker Compose configurations..."
+	cd docker-compose/production && docker compose config > /dev/null
+	@echo "✅ Docker Compose validation completed!"
 
 validate-aws:
 	@echo "🔍 Validating AWS prerequisites..."
@@ -280,7 +280,7 @@ test-infrastructure:
 # Cleanup
 # ============================================================================
 
-.PHONY: clean destroy-aws destroy-gcp destroy-azure
+.PHONY: clean destroy-aws destroy-gcp destroy-azure destroy-do
 
 clean:
 	@echo "🧹 Cleaning up temporary files..."
@@ -308,6 +308,11 @@ destroy-azure:
 	cd terraform/azure && terraform destroy -auto-approve
 	cd terraform/tf-backend/azure && terraform destroy -auto-approve
 
+destroy-do:
+	@echo "💥 Destroying DigitalOcean infrastructure..."
+	@read -p "Are you sure you want to destroy DigitalOcean infrastructure? [y/N]: " confirm && [ "$$confirm" = "y" ]
+	cd terraform/digitalocean && terraform destroy -auto-approve
+
 # ============================================================================
 # Status and Monitoring
 # ============================================================================
@@ -318,7 +323,7 @@ status:
 	@echo "📊 Deployment Status:"
 	@echo ""
 	@echo "🐳 Docker Compose:"
-	@cd docker-compose/production && docker-compose ps 2>/dev/null || echo "  Not running"
+	@cd docker-compose/production && docker compose ps 2>/dev/null || echo "  Not running"
 	@echo ""
 	@echo "☸️  Kubernetes:"
 	@kubectl get pods -n production 2>/dev/null || echo "  Not connected or deployed"
@@ -341,10 +346,10 @@ logs:
 dev-setup:
 	@echo "🛠️  Setting up development environment..."
 	$(MAKE) validate
-	cd docker-compose && docker-compose up -d postgres redis
+	cd docker-compose && docker compose up -d postgres redis
 	@echo "✅ Development environment ready!"
 
 dev-teardown:
 	@echo "🛠️  Tearing down development environment..."
-	cd docker-compose && docker-compose down
+	cd docker-compose && docker compose down
 	@echo "✅ Development environment stopped!"
