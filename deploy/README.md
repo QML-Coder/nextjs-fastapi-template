@@ -8,6 +8,7 @@ This directory contains deployment configurations for the Next.js + FastAPI temp
 - **AWS**: EKS + CloudFront + RDS (`make deploy-aws`, `make destroy-aws`)
 - **GCP**: GKE + Cloud CDN + Cloud SQL (`make deploy-gcp`, `make destroy-gcp`)
 - **Azure**: AKS + Azure CDN + Azure Database (`make deploy-azure`, `make destroy-azure`)
+- **Oracle Cloud**: OKE + CDN + Autonomous Database (`make deploy-oci`, `make destroy-oci`)
 - **DigitalOcean**: Managed Kubernetes + Spaces CDN (`make deploy-digitalocean`, `make destroy-digitalocean`)
 
 ### Platform as a Service
@@ -27,6 +28,7 @@ This directory contains deployment configurations for the Next.js + FastAPI temp
 make deploy-aws           # Deploy to AWS EKS + CloudFront
 make deploy-gcp           # Deploy to GCP GKE + Cloud CDN  
 make deploy-azure         # Deploy to Azure AKS + Azure CDN
+make deploy-oci           # Deploy to Oracle Cloud OKE + CDN
 make deploy-digitalocean  # Deploy to DigitalOcean Kubernetes
 
 # Platform deployments
@@ -54,7 +56,7 @@ This template follows a **hybrid deployment strategy**:
 
 ### 🏗️ Infrastructure as Code (Terraform)
 
-**Supported Providers**: AWS, GCP, Azure, DigitalOcean
+**Supported Providers**: AWS, GCP, Azure, Oracle Cloud, DigitalOcean
 
 #### Prerequisites
 1. **Install Terraform**: [Terraform](https://terraform.io) >= 1.0
@@ -62,6 +64,7 @@ This template follows a **hybrid deployment strategy**:
    - AWS: `aws configure`
    - GCP: `gcloud auth login`
    - Azure: `az login`
+   - Oracle Cloud: `oci setup config`
    - DigitalOcean: `doctl auth init`
 3. **Set up Remote State Storage**: See [tf-backend explanation](#terraform-remote-state-tf-backend)
 
@@ -106,6 +109,7 @@ make deploy-k8s-aws
 - **AWS**: S3 bucket + DynamoDB table for state locking
 - **GCP**: Google Cloud Storage bucket
 - **Azure**: Azure Storage Account + Container
+- **Oracle Cloud**: Object Storage bucket
 - **DigitalOcean**: Spaces bucket for state storage
 
 **Why it's needed**:
@@ -116,7 +120,7 @@ make deploy-k8s-aws
 
 #### Folder Structure
 - `terraform/tf-backend/`: Creates remote state storage (S3, GCS, Azure Storage, Spaces)
-- `terraform/{aws,gcp,azure,digitalocean}/`: Cloud-specific infrastructure definitions  
+- `terraform/{aws,gcp,azure,oci,digitalocean}/`: Cloud-specific infrastructure definitions  
 - `terraform/modules/k8s-cluster/`: Shared Kubernetes cluster logic
 - `kubernetes/`: Application manifests and configurations (see [Kubernetes Folder Purpose](#kubernetes-folder-purpose))
 
@@ -263,6 +267,13 @@ gcloud config set project YOUR_PROJECT_ID
 # Install: https://docs.microsoft.com/en-us/cli/azure/install-azure-cli
 az login
 # Terraform uses Azure CLI authentication
+```
+
+**Oracle Cloud CLI**:
+```bash
+# Install: https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/cliinstall.htm
+oci setup config
+# Terraform uses OCI configuration file and environment variables
 ```
 
 **DigitalOcean CLI**:
@@ -443,6 +454,66 @@ doctl auth init
    az cdn endpoint purge --content-paths "/*" --profile-name your-cdn-profile --name your-endpoint --resource-group your-resource-group
    ```
 
+### Oracle Cloud Infrastructure (OCI) Deployment
+
+#### Infrastructure Components
+- **OKE Cluster**: Oracle Kubernetes Engine
+- **CDN**: Oracle Cloud Infrastructure CDN
+- **Autonomous Database**: Managed PostgreSQL-compatible database
+- **Load Balancer**: Regional and global load balancing
+- **DNS**: Oracle Cloud DNS management
+- **Certificate Manager**: SSL certificate management
+
+#### Step-by-step Setup
+
+1. **Configure Oracle Cloud CLI**
+   ```bash
+   # Install OCI CLI
+   # https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/cliinstall.htm
+   oci setup config
+   
+   # Verify authentication
+   oci iam region list
+   
+   # Set compartment and tenancy environment variables
+   export TF_VAR_tenancy_ocid="ocid1.tenancy.oc1..xxx"
+   export TF_VAR_compartment_ocid="ocid1.compartment.oc1..xxx"
+   ```
+
+2. **Set up Remote State**
+   ```bash
+   cd terraform/tf-backend/oci
+   terraform init
+   terraform apply
+   ```
+
+3. **Deploy Infrastructure**
+   ```bash
+   cd ../../oci
+   cp terraform.tfvars.example terraform.tfvars
+   # Edit terraform.tfvars with your OCI values
+   terraform init
+   terraform apply
+   ```
+
+4. **Deploy Application**
+   ```bash
+   # Connect to OKE cluster
+   oci ce cluster create-kubeconfig --cluster-id your-cluster-ocid --file ~/.kube/config
+   
+   # Deploy application
+   kubectl apply -f kubernetes/base/
+   ```
+
+5. **Deploy Frontend to Oracle CDN**
+   ```bash
+   # Build and deploy frontend
+   cd ../../nextjs-frontend
+   npm run build
+   oci os object bulk-upload --bucket-name your-frontend-bucket --src-dir out/
+   oci edge purge create --distribution-id your-distribution-id --items '*'
+   ```
+
 ### DigitalOcean Deployment
 
 #### Infrastructure Components
@@ -542,6 +613,7 @@ Every deployment method includes corresponding teardown commands:
 make destroy-aws           # Remove AWS infrastructure
 make destroy-gcp           # Remove GCP infrastructure
 make destroy-azure         # Remove Azure infrastructure
+make destroy-oci           # Remove Oracle Cloud infrastructure
 make destroy-digitalocean  # Remove DigitalOcean infrastructure
 
 # Platform teardowns
@@ -619,6 +691,7 @@ NEXT_PUBLIC_ENVIRONMENT=production
 - **AWS**: ~$150-300/month for small production workload
 - **GCP**: ~$120-250/month for similar workload  
 - **Azure**: ~$140-280/month for comparable setup
+- **Oracle Cloud**: ~$100-200/month for comparable setup (Always Free tier available)
 - **DigitalOcean**: ~$50-120/month for managed Kubernetes
 
 ### Cost-Saving Tips

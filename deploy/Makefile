@@ -16,6 +16,7 @@ help:
 	@echo "  deploy-aws        Deploy to AWS EKS + CloudFront"
 	@echo "  deploy-gcp        Deploy to GCP GKE + Cloud CDN"
 	@echo "  deploy-azure      Deploy to Azure AKS + Azure CDN"
+	@echo "  deploy-oci        Deploy to Oracle Cloud OKE + CDN"
 	@echo "  deploy-do         Deploy to DigitalOcean Kubernetes"
 	@echo ""
 	@echo "🐳  Container Deployments:"
@@ -35,12 +36,13 @@ help:
 	@echo "  destroy-aws       Destroy AWS infrastructure"
 	@echo "  destroy-gcp       Destroy GCP infrastructure"
 	@echo "  destroy-azure     Destroy Azure infrastructure"
+	@echo "  destroy-oci       Destroy Oracle Cloud infrastructure"
 
 # ============================================================================
 # Infrastructure Initialization
 # ============================================================================
 
-.PHONY: init-aws init-gcp init-azure
+.PHONY: init-aws init-gcp init-azure init-oci
 
 init-aws:
 	@echo "🏗️  Initializing AWS infrastructure..."
@@ -57,11 +59,16 @@ init-azure:
 	cd terraform/tf-backend/azure && terraform init && terraform apply -auto-approve
 	cd terraform/azure && terraform init && terraform plan
 
+init-oci:
+	@echo "🏗️  Initializing Oracle Cloud infrastructure..."
+	cd terraform/tf-backend/oci && terraform init && terraform apply -auto-approve
+	cd terraform/oci && terraform init && terraform plan
+
 # ============================================================================
 # Cloud Deployments
 # ============================================================================
 
-.PHONY: deploy-aws deploy-gcp deploy-azure deploy-do
+.PHONY: deploy-aws deploy-gcp deploy-azure deploy-oci deploy-do
 
 deploy-aws: validate-aws
 	@echo "🚀 Deploying to AWS EKS + CloudFront..."
@@ -89,6 +96,14 @@ deploy-azure: validate-azure
 	$(MAKE) deploy-frontend-azure
 	@echo "✅ Azure deployment completed!"
 
+deploy-oci: validate-oci
+	@echo "🚀 Deploying to Oracle Cloud OKE + CDN..."
+	cd terraform/oci && terraform apply -auto-approve
+	$(MAKE) update-kubeconfig-oci
+	$(MAKE) deploy-k8s-oci
+	$(MAKE) deploy-frontend-oci
+	@echo "✅ Oracle Cloud deployment completed!"
+
 deploy-do:
 	@echo "🚀 Deploying to DigitalOcean Kubernetes..."
 	cd terraform/digitalocean && terraform apply -auto-approve
@@ -99,7 +114,7 @@ deploy-do:
 # Kubernetes Deployments
 # ============================================================================
 
-.PHONY: deploy-k8s deploy-k8s-aws deploy-k8s-gcp deploy-k8s-azure
+.PHONY: deploy-k8s deploy-k8s-aws deploy-k8s-gcp deploy-k8s-azure deploy-k8s-oci
 
 deploy-k8s:
 	@echo "📦 Deploying application to Kubernetes..."
@@ -124,11 +139,15 @@ deploy-k8s-azure: deploy-k8s
 	@echo "🔧 Configuring Azure-specific resources..."
 	kubectl apply -f kubernetes/overlays/azure/
 
+deploy-k8s-oci: deploy-k8s
+	@echo "🔧 Configuring Oracle Cloud-specific resources..."
+	kubectl apply -f kubernetes/overlays/oci/
+
 # ============================================================================
 # Frontend Deployments
 # ============================================================================
 
-.PHONY: deploy-frontend-aws deploy-frontend-gcp deploy-frontend-azure
+.PHONY: deploy-frontend-aws deploy-frontend-gcp deploy-frontend-azure deploy-frontend-oci
 
 deploy-frontend-aws:
 	@echo "🌐 Deploying frontend to AWS CloudFront..."
@@ -145,6 +164,12 @@ deploy-frontend-azure:
 	@echo "🌐 Deploying frontend to Azure CDN..."
 	cd ../nextjs-frontend && npm run build
 	az storage blob upload-batch --destination '$web' --source ../nextjs-frontend/out/ --account-name $$(cd terraform/azure && terraform output -raw storage_account_name)
+
+deploy-frontend-oci:
+	@echo "🌐 Deploying frontend to Oracle Cloud CDN..."
+	cd ../nextjs-frontend && npm run build
+	oci os object bulk-upload --bucket-name $$(cd terraform/oci && terraform output -raw frontend_bucket) --src-dir ../nextjs-frontend/out/
+	oci edge purge create --distribution-id $$(cd terraform/oci && terraform output -raw cdn_distribution_id) --items '*'
 
 # ============================================================================
 # Platform Deployments
@@ -188,7 +213,7 @@ deploy-hetzner:
 # Kubeconfig Updates
 # ============================================================================
 
-.PHONY: update-kubeconfig-aws update-kubeconfig-gcp update-kubeconfig-azure update-kubeconfig-do
+.PHONY: update-kubeconfig-aws update-kubeconfig-gcp update-kubeconfig-azure update-kubeconfig-oci update-kubeconfig-do
 
 update-kubeconfig-aws:
 	@echo "🔧 Updating kubeconfig for AWS EKS..."
@@ -202,6 +227,10 @@ update-kubeconfig-azure:
 	@echo "🔧 Updating kubeconfig for Azure AKS..."
 	az aks get-credentials --resource-group $$(cd terraform/azure && terraform output -raw resource_group_name) --name $$(cd terraform/azure && terraform output -raw cluster_name)
 
+update-kubeconfig-oci:
+	@echo "🔧 Updating kubeconfig for Oracle Cloud OKE..."
+	oci ce cluster create-kubeconfig --cluster-id $$(cd terraform/oci && terraform output -raw cluster_id) --file ~/.kube/config
+
 update-kubeconfig-do:
 	@echo "🔧 Updating kubeconfig for DigitalOcean..."
 	doctl kubernetes cluster kubeconfig save $$(cd terraform/digitalocean && terraform output -raw cluster_name)
@@ -210,7 +239,7 @@ update-kubeconfig-do:
 # Validation
 # ============================================================================
 
-.PHONY: validate validate-terraform validate-kubernetes validate-docker-compose validate-aws validate-gcp validate-azure
+.PHONY: validate validate-terraform validate-kubernetes validate-docker-compose validate-aws validate-gcp validate-azure validate-oci
 
 validate: validate-terraform validate-kubernetes validate-docker-compose
 
@@ -256,6 +285,11 @@ validate-azure:
 	@az account show > /dev/null || (echo "❌ Azure CLI not configured"; exit 1)
 	@terraform --version > /dev/null || (echo "❌ Terraform not installed"; exit 1)
 
+validate-oci:
+	@echo "🔍 Validating Oracle Cloud prerequisites..."
+	@oci iam region list > /dev/null || (echo "❌ Oracle Cloud CLI not configured"; exit 1)
+	@terraform --version > /dev/null || (echo "❌ Terraform not installed"; exit 1)
+
 # ============================================================================
 # Testing
 # ============================================================================
@@ -280,7 +314,7 @@ test-infrastructure:
 # Cleanup
 # ============================================================================
 
-.PHONY: clean destroy-aws destroy-gcp destroy-azure destroy-do
+.PHONY: clean destroy-aws destroy-gcp destroy-azure destroy-oci destroy-do
 
 clean:
 	@echo "🧹 Cleaning up temporary files..."
@@ -307,6 +341,12 @@ destroy-azure:
 	@read -p "Are you sure you want to destroy Azure infrastructure? [y/N]: " confirm && [ "$$confirm" = "y" ]
 	cd terraform/azure && terraform destroy -auto-approve
 	cd terraform/tf-backend/azure && terraform destroy -auto-approve
+
+destroy-oci:
+	@echo "💥 Destroying Oracle Cloud infrastructure..."
+	@read -p "Are you sure you want to destroy Oracle Cloud infrastructure? [y/N]: " confirm && [ "$$confirm" = "y" ]
+	cd terraform/oci && terraform destroy -auto-approve
+	cd terraform/tf-backend/oci && terraform destroy -auto-approve
 
 destroy-do:
 	@echo "💥 Destroying DigitalOcean infrastructure..."
