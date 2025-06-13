@@ -1,0 +1,37 @@
+# AWS Infrastructure Configuration
+# Copy this file to terraform.tfvars and customize the values
+
+# Project Configuration
+project_name = "nextjs-fastapi"
+environment  = "dev"  # dev, staging, prod
+aws_region   = "us-west-2"
+
+# Networking Configuration
+vpc_cidr = "10.0.0.0/16"
+private_subnets = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
+public_subnets  = ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"]
+
+# EKS Configuration
+kubernetes_version = "1.28"
+node_instance_types = ["t3.medium"]
+node_capacity_type = "ON_DEMAND"  # ON_DEMAND or SPOT
+
+# Node Group Scaling
+node_group_min_size     = 1
+node_group_max_size     = 5
+node_group_desired_size = 2
+
+# Database Configuration
+postgres_version = "15.4"
+db_instance_class = "db.t3.micro"  # Use db.t3.small or larger for production
+db_allocated_storage = 20
+db_max_allocated_storage = 100
+db_backup_retention_period = 7
+
+database_name = "nextjs_fastapi"
+database_username = "postgres"
+database_password = "change-this-secure-password"  # Use a strong password!
+
+# Domain Configuration (optional)
+# domain_name = "your-domain.com"
+# create_route53_zone = false
