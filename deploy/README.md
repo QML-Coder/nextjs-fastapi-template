@@ -569,40 +569,34 @@ doctl auth init
    doctl compute cdn flush your-cdn-id --files "*"
    ```
 
-## Deployment Scripts Implementation
+## Deployment Implementation
 
-All deployment commands are implemented as bash scripts in the `deploy/scripts/` directory and called through the Makefile:
-
-**Structure**:
-```
-deploy/scripts/
-├── aws/
-│   ├── deploy.sh      # AWS deployment logic
-│   └── destroy.sh     # AWS teardown logic
-├── gcp/
-│   ├── deploy.sh      # GCP deployment logic
-│   └── destroy.sh     # GCP teardown logic
-├── azure/
-│   ├── deploy.sh      # Azure deployment logic
-│   └── destroy.sh     # Azure teardown logic
-└── ...
-```
+All deployment commands are implemented directly in the **Makefile** for simplicity and maintainability:
 
 **Makefile Integration**:
 ```makefile
-deploy-aws:
-	@bash deploy/scripts/aws/deploy.sh
+deploy-aws: validate-aws
+	@echo "🚀 Deploying to AWS EKS + CloudFront..."
+	cd terraform/aws && terraform apply -auto-approve
+	$(MAKE) update-kubeconfig-aws
+	$(MAKE) deploy-k8s-aws
+	$(MAKE) deploy-frontend-aws
+	@echo "✅ AWS deployment completed!"
 
-destroy-aws:
-	@bash deploy/scripts/aws/destroy.sh
+deploy-gcp: validate-gcp
+	@echo "🚀 Deploying to GCP GKE + Cloud CDN..."
+	cd terraform/gcp && terraform apply -auto-approve
+	$(MAKE) update-kubeconfig-gcp
+	$(MAKE) deploy-k8s-gcp
+	$(MAKE) deploy-frontend-gcp
+	@echo "✅ GCP deployment completed!"
 ```
 
 **Benefits**:
-- **Consistency**: Same deployment logic across environments
-- **Maintainability**: Script logic separate from Makefile
-- **Error Handling**: Robust error checking and rollback
-- **Logging**: Detailed deployment logs
-- **Modularity**: Reusable functions across scripts
+- **Simplicity**: All logic in one place for easy maintenance
+- **Consistency**: Same deployment pattern across cloud providers
+- **Transparency**: Clear command execution visible in Makefile
+- **Modularity**: Reusable targets for different deployment phases
 
 ## Teardown Commands
 
