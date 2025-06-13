@@ -1,7 +1,7 @@
 # Deployment Makefile for Next.js + FastAPI Template
 # Usage: make <target>
 
-.PHONY: help init clean test deploy-aws deploy-gcp deploy-azure deploy-docker deploy-heroku
+.PHONY: help
 
 # Default target
 help:
@@ -40,6 +40,8 @@ help:
 # Infrastructure Initialization
 # ============================================================================
 
+.PHONY: init-aws init-gcp init-azure
+
 init-aws:
 	@echo "🏗️  Initializing AWS infrastructure..."
 	cd terraform/tf-backend/aws && terraform init && terraform apply -auto-approve
@@ -58,6 +60,8 @@ init-azure:
 # ============================================================================
 # Cloud Deployments
 # ============================================================================
+
+.PHONY: deploy-aws deploy-gcp deploy-azure deploy-do
 
 deploy-aws: validate-aws
 	@echo "🚀 Deploying to AWS EKS + CloudFront..."
@@ -95,6 +99,8 @@ deploy-do:
 # Kubernetes Deployments
 # ============================================================================
 
+.PHONY: deploy-k8s deploy-k8s-aws deploy-k8s-gcp deploy-k8s-azure
+
 deploy-k8s:
 	@echo "📦 Deploying application to Kubernetes..."
 	kubectl apply -f kubernetes/base/namespace.yaml
@@ -122,6 +128,8 @@ deploy-k8s-azure: deploy-k8s
 # Frontend Deployments
 # ============================================================================
 
+.PHONY: deploy-frontend-aws deploy-frontend-gcp deploy-frontend-azure
+
 deploy-frontend-aws:
 	@echo "🌐 Deploying frontend to AWS CloudFront..."
 	cd ../nextjs-frontend && npm run build
@@ -141,6 +149,8 @@ deploy-frontend-azure:
 # ============================================================================
 # Platform Deployments
 # ============================================================================
+
+.PHONY: deploy-docker deploy-heroku deploy-railway deploy-fly deploy-hetzner
 
 deploy-docker:
 	@echo "🐳 Deploying with Docker Compose..."
@@ -178,6 +188,8 @@ deploy-hetzner:
 # Kubeconfig Updates
 # ============================================================================
 
+.PHONY: update-kubeconfig-aws update-kubeconfig-gcp update-kubeconfig-azure update-kubeconfig-do
+
 update-kubeconfig-aws:
 	@echo "🔧 Updating kubeconfig for AWS EKS..."
 	aws eks update-kubeconfig --name $$(cd terraform/aws && terraform output -raw cluster_name) --region $$(cd terraform/aws && terraform output -raw aws_region)
@@ -197,6 +209,8 @@ update-kubeconfig-do:
 # ============================================================================
 # Validation
 # ============================================================================
+
+.PHONY: validate validate-terraform validate-kubernetes validate-docker validate-aws validate-gcp validate-azure
 
 validate: validate-terraform validate-kubernetes validate-docker
 
@@ -246,6 +260,8 @@ validate-azure:
 # Testing
 # ============================================================================
 
+.PHONY: test test-backend test-frontend test-infrastructure
+
 test: test-backend test-frontend test-infrastructure
 
 test-backend:
@@ -263,6 +279,8 @@ test-infrastructure:
 # ============================================================================
 # Cleanup
 # ============================================================================
+
+.PHONY: clean destroy-aws destroy-gcp destroy-azure
 
 clean:
 	@echo "🧹 Cleaning up temporary files..."
@@ -294,6 +312,8 @@ destroy-azure:
 # Status and Monitoring
 # ============================================================================
 
+.PHONY: status logs
+
 status:
 	@echo "📊 Deployment Status:"
 	@echo ""
@@ -315,6 +335,8 @@ logs:
 # ============================================================================
 # Development Helpers
 # ============================================================================
+
+.PHONY: dev-setup dev-teardown
 
 dev-setup:
 	@echo "🛠️  Setting up development environment..."
