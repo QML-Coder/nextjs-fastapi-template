@@ -1,0 +1,20 @@
+# Azure Infrastructure Configuration
+# Copy this file to terraform.tfvars and customize the values
+
+subscription_id = "your-subscription-id"
+location        = "eastus"
+project_name    = "nextjs-fastapi"
+environment     = "dev"
+
+# AKS node settings
+node_count = 2
+node_size  = "Standard_B2s"
+
+# Database credentials
+database_username = "postgres"
+database_password = "change-this-password"
+database_name     = "nextjs_fastapi"
+postgres_version  = "15"
+
+db_sku       = "B_Standard_B1ms"
+db_storage_mb = 32768

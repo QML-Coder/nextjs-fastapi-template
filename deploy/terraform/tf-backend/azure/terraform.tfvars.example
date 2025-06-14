@@ -1,0 +1,17 @@
+# Azure Backend Configuration
+# Copy this file to terraform.tfvars and customize the values
+
+# Azure subscription ID (required)
+subscription_id = "your-subscription-id"
+
+# Azure region for backend resources
+location = "eastus"
+
+# Resource group name for backend resources
+resource_group_name = "tf-backend-rg"
+
+# Base name of the storage account (a random suffix will be added)
+storage_account_name = "tftstate"
+
+# Name of the container to store state files
+container_name = "tfstate"
