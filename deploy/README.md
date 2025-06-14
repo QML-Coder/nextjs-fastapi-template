@@ -432,7 +432,11 @@ doctl auth init
    cd ../../azure
    cp terraform.tfvars.example terraform.tfvars
    # Edit terraform.tfvars with your values
-   terraform init
+   terraform init \
+     -backend-config="resource_group_name=<backend-rg>" \
+     -backend-config="storage_account_name=<backend-sa>" \
+     -backend-config="container_name=tfstate" \
+     -backend-config="key=terraform.tfstate"
    terraform apply
    ```
 
@@ -443,6 +447,7 @@ doctl auth init
    
    # Deploy application
    kubectl apply -f kubernetes/base/
+   kubectl apply -f kubernetes/overlays/azure/
    ```
 
 5. **Deploy Frontend to Azure CDN**
@@ -450,8 +455,8 @@ doctl auth init
    # Build and deploy frontend
    cd ../../nextjs-frontend
    npm run build
-   az storage blob upload-batch --destination '$web' --source out/ --account-name your-storage-account
-   az cdn endpoint purge --content-paths "/*" --profile-name your-cdn-profile --name your-endpoint --resource-group your-resource-group
+   az storage blob upload-batch --destination '$web' --source out/ --account-name $(terraform -chdir=../terraform/azure output -raw storage_account_name)
+   az cdn endpoint purge --content-paths "/*" --profile-name $(terraform -chdir=../terraform/azure output -raw cdn_endpoint | cut -d'.' -f1) --name $(terraform -chdir=../terraform/azure output -raw cdn_endpoint | cut -d'.' -f1) --resource-group $(terraform -chdir=../terraform/azure output -raw resource_group_name)
    ```
 
 ### Oracle Cloud Infrastructure (OCI) Deployment
